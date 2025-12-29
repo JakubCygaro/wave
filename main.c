@@ -6,7 +6,6 @@
 #include <string.h>
 #define COMPLEX_IMPL
 #include "complex.h"
-#include <math.h>
 
 #define FPS 60
 #define WIDHT 800
@@ -175,45 +174,6 @@ void audio_input_callback(void* buf, unsigned int frames)
     }
 }
 
-cmx* fft(cmx* x, size_t n)
-{
-    if (!n) {
-        return NULL;
-    }
-    if (n == 1) {
-        cmx* ret = calloc(n, sizeof(cmx));
-        return ret;
-    }
-    cmx* x0 = calloc(n / 2, sizeof(cmx));
-    cmx* x1 = calloc(n / 2, sizeof(cmx));
-
-    for (size_t i = 0; 2 * i < n; i++) {
-        x0[i] = x[2 * i];
-        x0[i] = x[2 * i];
-    }
-    cmx* tmp = { 0 };
-    tmp = fft(x0, n / 2);
-    free(x0);
-    x0 = tmp;
-    tmp = fft(x1, n / 2);
-    free(x1);
-    x1 = tmp;
-
-    cmx* ret = calloc(n, sizeof(cmx));
-    for (size_t k = 0; k < (n / 2); k++) {
-        cmx p = x0[k];
-        cmx q_0 = cmx_mul(from_re(-2.0 * PI), from_im(1));
-        cmx q_1 = cmx_div(q_0, from_re((double)n));
-        cmx q_2 = cmx_mul(q_1, from_re((double)k));
-        cmx q_3 = cmx_exp(q_2);
-        cmx q = cmx_mul(q_3, x1[k + (n / 2)]);
-        ret[k] = cmx_add(p, q);
-        ret[k+(n/2)] = cmx_sub(p, q);
-    }
-    free(x0);
-    free(x1);
-    return ret;
-}
 
 int main(int argc, char** args)
 {
