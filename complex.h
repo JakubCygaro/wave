@@ -1,19 +1,27 @@
 #ifndef COMPLEX_H
 #define COMPLEX_H
-
 #include <math.h>
 typedef struct {
     double re;
     double im;
 } cmx;
 
-#define CMXFMT "%e%+ei"
+/// cmx fmt for printf and other such functions, uses %lf
+#define CMXFMT "%lf%+lfi"
+/// cmx fmt for printf and other such functions, uses %e
+#define CMXFMTE "%e%+ei"
+/// expands to arguments for printing a complex value
 #define CMXP(c) c.re, c.im
 
-cmx from_im(double im);
-cmx from_re(double re);
+/// construct a complex number with the real component set to re, and the imaginary component set to 0
+cmx cmx_re(double re);
+/// construct a complex number with the imaginary component set to im, and the real component set to 0
+cmx cmx_im(double im);
+/// construct a complex number with the imaginary component set to im, the real component set to re
 cmx cmx_from(double re, double im);
+/// rounds internal values of re and im before comparison
 int cmx_eq_rounded(cmx a, cmx b);
+/// does no rounding of the internal values of re and im before comparison
 int cmx_eq_exact(cmx a, cmx b);
 cmx cmx_add(cmx a, cmx b);
 cmx cmx_sub(cmx a, cmx b);
