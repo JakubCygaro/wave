@@ -7,7 +7,7 @@ typedef struct {
     double im;
 } cmx;
 
-#define CMXFMT "%lf%+lfi"
+#define CMXFMT "%e%+ei"
 #define CMXP(c) c.re, c.im
 
 cmx from_im(double im);
@@ -86,6 +86,9 @@ cmx cmx_div(cmx w, cmx z)
         .im = ((v * x) - (u * y)) / div,
     };
 }
+double cmx_mod(cmx z){
+    return sqrtl(z.re * z.re + z.im * z.im);
+}
 cmx cmx_exp(cmx z)
 {
     double a = z.re;
@@ -93,9 +96,6 @@ cmx cmx_exp(cmx z)
     cmx e_a = from_re(exp(a));
     cmx ang = cmx_add(from_re(cos(b)), from_im(sin(b)));
     return cmx_mul(e_a, ang);
-}
-double cmx_mod(cmx z){
-    return sqrtl(z.re * z.re + z.im * z.im);
 }
 #endif
 #endif
