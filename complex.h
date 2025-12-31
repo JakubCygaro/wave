@@ -1,6 +1,5 @@
 #ifndef COMPLEX_H
 #define COMPLEX_H
-#include <math.h>
 typedef struct {
     double re;
     double im;
@@ -29,16 +28,20 @@ cmx cmx_mul(cmx z1, cmx z2);
 cmx cmx_div(cmx a, cmx b);
 cmx cmx_exp(cmx z);
 double cmx_mod(cmx z);
-
+cmx cmx_recip(cmx z);
+double cmx_arg(cmx z);
+cmx cmx_rand(void);
 #ifdef COMPLEX_IMPL
-cmx from_im(double im)
+#include <math.h>
+#include <stdlib.h>
+cmx cmx_im(double im)
 {
     return (cmx) {
         .re = 0,
         .im = im,
     };
 }
-cmx from_re(double re)
+cmx cmx_re(double re)
 {
     return (cmx) {
         .re = re,
@@ -94,16 +97,115 @@ cmx cmx_div(cmx w, cmx z)
         .im = ((v * x) - (u * y)) / div,
     };
 }
-double cmx_mod(cmx z){
+double cmx_mod(cmx z)
+{
     return sqrtl(z.re * z.re + z.im * z.im);
 }
 cmx cmx_exp(cmx z)
 {
     double a = z.re;
     double b = z.im;
-    cmx e_a = from_re(exp(a));
-    cmx ang = cmx_add(from_re(cos(b)), from_im(sin(b)));
+    cmx e_a = cmx_re(exp(a));
+    cmx ang = cmx_add(cmx_re(cos(b)), cmx_im(sin(b)));
     return cmx_mul(e_a, ang);
+}
+cmx cmx_conj(cmx z){
+    return (cmx) {
+        z.re,
+        -z.im,
+    };
+}
+double cmx_arg(cmx z) {
+    return atan(z.im / z.re);
+}
+cmx cmx_rand(void)
+{
+    return (cmx) {
+        (double)rand() / (double)(RAND_MAX),
+        (double)rand() / (double)(RAND_MAX),
+    };
+}
+int cmx_log2i(int n)
+{
+    int k = n, i = 0;
+    while (k) {
+        k >>= 1;
+        i++;
+    }
+    return i - 1;
+}
+// https://stackoverflow.com/a/37729648
+// I added my comments to explain this algorithm
+int cmx_rev2(int array_sz, int n)
+{
+    if(!n) return 0;
+    int ret = 0;
+    // iterates through each bit of n
+    // log2(array_sz) is the max size of reversed n in bits, so for example
+    // N = 16 -> 4 bits; 0001 -> 1000
+    // N = 8 -> 3 bits; 001 -> 100
+    // N = 4 -> 2 bits; 01 -> 10
+    for (int j = 1; j <= cmx_log2i(array_sz); j++) {
+        // 1 << (log2i(array_sz) - j) creates a bit mask for the current
+        // bit of the iteration, starting from the leftmost bit
+        // assuming array_sz = 16 we will iterate through
+        // 1000 ( 1 << 3 )
+        // 0100 ( 1 << 2 )
+        // 0010 ( 1 << 1 )
+        // 0001 ( 1 << 0 )
+        // the cond checks wether n has this bit set to 1
+        if (n & (1 << (cmx_log2i(array_sz) - j))) {
+            // (j - 1) gives us the position of the reversed bit,
+            // |= adds it to ret
+            // example:
+            // n = 0110
+            // on mask 0100 (where j = 2), j - 1 equals 1 and so
+            // 1 << ( j - 1 ) equals 0010 -> the bit in reverse
+            ret |= 1 << (j - 1);
+        }
+    }
+    return ret;
+}
+
+int* cmx_precomp_reversed_bits(int max) {
+    int* ret = calloc(max, sizeof(int));
+    for (size_t k = 0; k < max; k++) {
+        ret[k] = cmx_rev2(max, k);
+    }
+    return ret;
+}
+static cmx* cmx_bit_reverse_copy(const cmx* a, size_t n, const int* precomp_bitr)
+{
+    cmx* ret = calloc(n, sizeof(cmx));
+    for (size_t k = 0; k < n; k++) {
+        int bitr = precomp_bitr ? precomp_bitr[k] : cmx_rev2(n, k);
+        ret[bitr] = a[k];
+    }
+    return ret;
+}
+// https://en.wikipedia.org/wiki/Cooley%E2%80%93Tukey_FFT_algorithm#Data_reordering,_bit_reversal,_and_in-place_algorithms
+cmx* cmx_fft2(const cmx* x, size_t n, const int* precomp_bitr)
+{
+    cmx* out = cmx_bit_reverse_copy(x, n, precomp_bitr);
+    for (size_t s = 1; s <= cmx_log2i(n); s++) {
+        size_t m = pow(2, s);
+        cmx w_m = cmx_exp(
+            cmx_div(
+                cmx_mul(
+                    cmx_re(-2 * M_PI), cmx_im(1)),
+                cmx_re(m)));
+        for (size_t k = 0; k < n; k += m) {
+            cmx w = cmx_re(1);
+            for (size_t j = 0; j < m / 2; j++) {
+                cmx t = cmx_mul(w, out[k + j + m / 2]);
+                cmx u = out[k + j];
+                out[k + j] = cmx_add(u, t);
+                out[k + j + m / 2] = cmx_sub(u, t);
+                w = cmx_mul(w, w_m);
+            }
+        }
+    }
+    return out;
 }
 #endif
 #endif
