@@ -31,6 +31,10 @@ double cmx_mod(cmx z);
 cmx cmx_recip(cmx z);
 double cmx_arg(cmx z);
 cmx cmx_rand(void);
+cmx* cmx_fft2(const cmx* x, unsigned long n, const int* precomp_bitr, cmx* write_to);
+int* cmx_precomp_reversed_bits(int max);
+int cmx_rev2(int array_sz, int n);
+int cmx_log2i(int n);
 #ifdef COMPLEX_IMPL
 #include <math.h>
 #include <stdlib.h>
@@ -109,13 +113,15 @@ cmx cmx_exp(cmx z)
     cmx ang = cmx_add(cmx_re(cos(b)), cmx_im(sin(b)));
     return cmx_mul(e_a, ang);
 }
-cmx cmx_conj(cmx z){
+cmx cmx_conj(cmx z)
+{
     return (cmx) {
         z.re,
         -z.im,
     };
 }
-double cmx_arg(cmx z) {
+double cmx_arg(cmx z)
+{
     return atan(z.im / z.re);
 }
 cmx cmx_rand(void)
@@ -138,7 +144,8 @@ int cmx_log2i(int n)
 // I added my comments to explain this algorithm
 int cmx_rev2(int array_sz, int n)
 {
-    if(!n) return 0;
+    if (!n)
+        return 0;
     int ret = 0;
     // iterates through each bit of n
     // log2(array_sz) is the max size of reversed n in bits, so for example
@@ -167,16 +174,17 @@ int cmx_rev2(int array_sz, int n)
     return ret;
 }
 
-int* cmx_precomp_reversed_bits(int max) {
+int* cmx_precomp_reversed_bits(int max)
+{
     int* ret = calloc(max, sizeof(int));
     for (size_t k = 0; k < max; k++) {
         ret[k] = cmx_rev2(max, k);
     }
     return ret;
 }
-static cmx* cmx_bit_reverse_copy(const cmx* a, size_t n, const int* precomp_bitr)
+static cmx* cmx_bit_reverse_copy(const cmx* a, size_t n, const int* precomp_bitr, cmx* write_to)
 {
-    cmx* ret = calloc(n, sizeof(cmx));
+    cmx* ret = write_to ? write_to : calloc(n, sizeof(cmx));
     for (size_t k = 0; k < n; k++) {
         int bitr = precomp_bitr ? precomp_bitr[k] : cmx_rev2(n, k);
         ret[bitr] = a[k];
@@ -184,9 +192,9 @@ static cmx* cmx_bit_reverse_copy(const cmx* a, size_t n, const int* precomp_bitr
     return ret;
 }
 // https://en.wikipedia.org/wiki/Cooley%E2%80%93Tukey_FFT_algorithm#Data_reordering,_bit_reversal,_and_in-place_algorithms
-cmx* cmx_fft2(const cmx* x, size_t n, const int* precomp_bitr)
+cmx* cmx_fft2(const cmx* x, size_t n, const int* precomp_bitr, cmx* write_to)
 {
-    cmx* out = cmx_bit_reverse_copy(x, n, precomp_bitr);
+    cmx* out = cmx_bit_reverse_copy(x, n, precomp_bitr, write_to);
     for (size_t s = 1; s <= cmx_log2i(n); s++) {
         size_t m = pow(2, s);
         cmx w_m = cmx_exp(
@@ -205,7 +213,10 @@ cmx* cmx_fft2(const cmx* x, size_t n, const int* precomp_bitr)
             }
         }
     }
-    return out;
+    if(write_to)
+        return NULL;
+    else
+        return out;
 }
 #endif
 #endif

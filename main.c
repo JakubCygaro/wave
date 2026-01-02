@@ -10,6 +10,7 @@
 #define FPS 60
 #define WIDHT 800
 #define HEIGHT 600
+#define FFTSIZE 1 << 6
 
 #define streq(A, B) (strcmp(A, B) == 0)
 
@@ -161,19 +162,65 @@ const char* get_filename(const char* path)
     }
     return path + i;
 }
-
+static int* cmx_pre = NULL;
+static cmx* fft_input = NULL;
+static cmx* fft_output = NULL;
+static double* fft_draw_data = NULL;
+static unsigned int last_frames = 0;
+static size_t wav_data_ptr = 0;
+static size_t last_data_ptr = 0;
+static double max = WIDHT;
 void audio_input_callback(void* buf, unsigned int frames)
 {
-    static size_t wav_data_ptr = 0;
     unsigned char* d = buf;
+    last_data_ptr = wav_data_ptr;
     for (size_t i = 0; i < frames; i++) {
         memcpy(d + (i * AudioFile.bytes_per_block), AudioFile.data + wav_data_ptr, AudioFile.bytes_per_block);
+
         wav_data_ptr += AudioFile.bytes_per_block;
         if (wav_data_ptr >= AudioFile.datasz)
             wav_data_ptr = 0;
     }
+    last_frames = frames;
 }
-
+void update(void)
+{
+    printf("UPDATE\n");
+    if (!last_frames || !cmx_pre)
+        return;
+    size_t sample_rate = (last_frames / FFTSIZE);
+    for (size_t i = 0; i < FFTSIZE; i++) {
+        unsigned int v = *(unsigned int*)(AudioFile.data + last_data_ptr + (i * sample_rate * AudioFile.bytes_per_block));
+        fft_input[i++] = cmx_re((double)v);
+        // cmx c = fft_input[i - 1];
+        // printf(CMXFMT "\n", CMXP(c));
+        // printf("%lf\n", c.re);
+    }
+    (void)cmx_fft2(fft_input, FFTSIZE, cmx_pre, fft_output);
+    for (size_t i = 0; i < FFTSIZE; i++) {
+        cmx c = fft_output[i];
+        double v = cmx_mod(c);
+        max = v > max ? v : max;
+        fft_draw_data[i] = v;
+    }
+}
+void draw(void)
+{
+    const float cw = (float)WIDHT / (float)(FFTSIZE);
+    for (size_t i = 0; i < FFTSIZE; i++) {
+        double c = fft_draw_data[i];
+        // printf(CMXFMT"\n", CMXP(c));
+        double v = (c / max) * (double)HEIGHT;
+        // printf("%lf\n", v);
+        Rectangle r = {
+            .x = cw * i,
+            .y = HEIGHT - v,
+            .width = cw,
+            .height = v,
+        };
+        DrawRectangleRec(r, RED);
+    }
+}
 
 int main(int argc, char** args)
 {
@@ -191,6 +238,11 @@ int main(int argc, char** args)
     AudioStream stream = LoadAudioStream(wav.samplert, wav.bits_per_sample, wav.nchan);
 
     SetAudioStreamCallback(stream, audio_input_callback);
+
+    cmx_pre = cmx_precomp_reversed_bits(FFTSIZE);
+    fft_input = calloc(FFTSIZE, sizeof(cmx));
+    fft_output = calloc(FFTSIZE, sizeof(cmx));
+    fft_draw_data = calloc(FFTSIZE, sizeof(double));
 
     printf("WAV file\n"
            "fsize: %d\n"
@@ -219,11 +271,15 @@ int main(int argc, char** args)
     fnpos = Vector2Subtract(fnpos, Vector2Scale(fnsz, .5));
     PlayAudioStream(stream);
     while (!WindowShouldClose()) {
+        update();
         BeginDrawing();
         ClearBackground(BLACK);
+        draw();
         DrawTextEx(GetFontDefault(), filename, fnpos, 24, 10, WHITE);
         EndDrawing();
     }
+    free(fft_input);
+    free(fft_output);
     UnloadAudioStream(stream);
     CloseAudioDevice();
     CloseWindow();
