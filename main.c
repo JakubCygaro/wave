@@ -10,7 +10,7 @@
 #define FPS 60
 #define WIDHT 800
 #define HEIGHT 600
-#define FFTSIZE 1 << 6
+#define FFTSIZE 1 << 9
 
 #define streq(A, B) (strcmp(A, B) == 0)
 
@@ -185,31 +185,29 @@ void audio_input_callback(void* buf, unsigned int frames)
 }
 void update(void)
 {
-    printf("UPDATE\n");
     if (!last_frames || !cmx_pre)
         return;
     size_t sample_rate = (last_frames / FFTSIZE);
-    for (size_t i = 0; i < FFTSIZE; i++) {
-        unsigned int v = *(unsigned int*)(AudioFile.data + last_data_ptr + (i * sample_rate * AudioFile.bytes_per_block));
-        fft_input[i++] = cmx_re((double)v);
-        // cmx c = fft_input[i - 1];
-        // printf(CMXFMT "\n", CMXP(c));
-        // printf("%lf\n", c.re);
+    for (size_t i = 0; i < FFTSIZE && i < last_frames; i++) {
+        unsigned int v = *(unsigned int*)(AudioFile.data + last_data_ptr + (i * AudioFile.bytes_per_block * 10));
+        // printf("%d\n", v);
+        fft_input[i] = cmx_re((double)v);
     }
     (void)cmx_fft2(fft_input, FFTSIZE, cmx_pre, fft_output);
     for (size_t i = 0; i < FFTSIZE; i++) {
         cmx c = fft_output[i];
-        double v = cmx_mod(c);
+        // double v = cmx_mod(c);
+        double v = cmx_mod(cmx_mul(c, cmx_re(i * 0.5)));
         max = v > max ? v : max;
         fft_draw_data[i] = v;
     }
+    max *= 1.05;
 }
 void draw(void)
 {
-    const float cw = (float)WIDHT / (float)(FFTSIZE);
-    for (size_t i = 0; i < FFTSIZE; i++) {
-        double c = fft_draw_data[i];
-        // printf(CMXFMT"\n", CMXP(c));
+    const float cw = (float)WIDHT / (float)((FFTSIZE) - 1);
+    for (size_t i = 0; i < (FFTSIZE) - 1; i++) {
+        double c = fft_draw_data[i + 1];
         double v = (c / max) * (double)HEIGHT;
         // printf("%lf\n", v);
         Rectangle r = {
@@ -220,6 +218,7 @@ void draw(void)
         };
         DrawRectangleRec(r, RED);
     }
+    max = 0.0;
 }
 
 int main(int argc, char** args)
@@ -280,6 +279,7 @@ int main(int argc, char** args)
     }
     free(fft_input);
     free(fft_output);
+    free(fft_draw_data);
     UnloadAudioStream(stream);
     CloseAudioDevice();
     CloseWindow();
