@@ -189,15 +189,16 @@ void update(void)
         return;
     size_t sample_rate = (last_frames / FFTSIZE);
     for (size_t i = 0; i < FFTSIZE && i < last_frames; i++) {
-        unsigned int v = *(unsigned int*)(AudioFile.data + last_data_ptr + (i * AudioFile.bytes_per_block * 10));
-        // printf("%d\n", v);
+        // unsigned short v = *(unsigned short*)(AudioFile.data + last_data_ptr + (i * AudioFile.bytes_per_block * 8));
+        unsigned int v = *(unsigned int*)(AudioFile.data + last_data_ptr + (i * AudioFile.bytes_per_block * 32));
+        // printf("%u\n", v);
         fft_input[i] = cmx_re((double)v);
     }
-    (void)cmx_fft2(fft_input, FFTSIZE, cmx_pre, fft_output);
+    (void)cmx_fft2(fft_input, FFTSIZE, 0, cmx_pre, fft_output);
     for (size_t i = 0; i < FFTSIZE; i++) {
         cmx c = fft_output[i];
         // double v = cmx_mod(c);
-        double v = cmx_mod(cmx_mul(c, cmx_re(i * 0.5)));
+        double v = cmx_mod(cmx_mul(c, cmx_re((i+1) * 0.5)));
         max = v > max ? v : max;
         fft_draw_data[i] = v;
     }

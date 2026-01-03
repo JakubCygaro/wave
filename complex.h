@@ -31,7 +31,7 @@ double cmx_mod(cmx z);
 cmx cmx_recip(cmx z);
 double cmx_arg(cmx z);
 cmx cmx_rand(void);
-cmx* cmx_fft2(const cmx* x, unsigned long n, const int* precomp_bitr, cmx* write_to);
+cmx* cmx_fft2(const cmx* x, unsigned long n, double step, const int* precomp_bitr, cmx* write_to);
 int* cmx_precomp_reversed_bits(int max);
 int cmx_rev2(int array_sz, int n);
 int cmx_log2i(int n);
@@ -192,7 +192,7 @@ static cmx* cmx_bit_reverse_copy(const cmx* a, size_t n, const int* precomp_bitr
     return ret;
 }
 // https://en.wikipedia.org/wiki/Cooley%E2%80%93Tukey_FFT_algorithm#Data_reordering,_bit_reversal,_and_in-place_algorithms
-cmx* cmx_fft2(const cmx* x, size_t n, const int* precomp_bitr, cmx* write_to)
+cmx* cmx_fft2(const cmx* x, size_t n, double step, const int* precomp_bitr, cmx* write_to)
 {
     cmx* out = cmx_bit_reverse_copy(x, n, precomp_bitr, write_to);
     for (size_t s = 1; s <= cmx_log2i(n); s++) {
@@ -211,6 +211,11 @@ cmx* cmx_fft2(const cmx* x, size_t n, const int* precomp_bitr, cmx* write_to)
                 out[k + j + m / 2] = cmx_sub(u, t);
                 w = cmx_mul(w, w_m);
             }
+        }
+    }
+    if(step){
+        for(size_t i = 0; i < n; i++){
+            out[i] = cmx_mul(out[i], cmx_re(step));
         }
     }
     if(write_to)
