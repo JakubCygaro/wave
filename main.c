@@ -1,3 +1,4 @@
+#include "wavfile.h"
 #include <raylib.h>
 #include <raymath.h>
 #include <stdint.h>
@@ -12,145 +13,6 @@
 #define HEIGHT 600
 #define FFTSIZE 1 << 9
 
-#define streq(A, B) (strcmp(A, B) == 0)
-
-typedef struct {
-    uint32_t fsize;
-    uint16_t formatty;
-    uint16_t nchan;
-    uint32_t samplert;
-    uint32_t bytes_per_sec;
-    uint16_t bytes_per_block;
-    uint16_t bits_per_sample;
-    uint32_t datasz;
-    char* data;
-} WaveFile;
-
-static WaveFile AudioFile = { 0 };
-
-void wavefile_free(WaveFile wav)
-{
-    if (wav.data) {
-        free(wav.data);
-    }
-}
-
-void pass_until(const char* pat, FILE* file)
-{
-    int c = 0;
-    char* bufp = (char*)pat;
-    while (1) {
-        c = fgetc(file);
-        if (c == EOF) {
-            fprintf(stderr, "Failed reading header (premature end while looking for fmt data)\n");
-            exit(-1);
-        }
-        if (c == *bufp) {
-            bufp++;
-        } else {
-            bufp = (char*)pat;
-        }
-        if (*bufp == '\0') {
-            break;
-        }
-    }
-}
-
-WaveFile load_wav_file(const char* path)
-{
-    FILE* f = fopen(path, "r");
-    if (!f) {
-        fprintf(stderr, "Could not open file `%s` for reading\n", path);
-        exit(-1);
-    }
-    WaveFile wav = { 0 };
-    static char buf[64] = { 0 };
-    if (fread(buf, 1, 4, f) != 4 || !streq(buf, "RIFF")) {
-        fprintf(stderr, "Failed reading header (RIFF)\n");
-        exit(-1);
-    }
-
-    if (fread(buf, 1, 4, f) != 4) {
-        fprintf(stderr, "Failed reading header (file size)\n");
-        exit(-1);
-    }
-    wav.fsize = *((uint32_t*)buf);
-
-    if (fread(buf, 1, 4, f) != 4 || !streq(buf, "WAVE")) {
-        fprintf(stderr, "Failed reading header (WAVE)\n");
-        exit(-1);
-    }
-    memset(buf, 0, sizeof(buf));
-    pass_until("fmt\x20", f);
-
-    uint32_t fmtlen = 0;
-    if (fread(buf, 1, 4, f) != 4) {
-        fprintf(stderr, "Failed reading header (length of format data)\n");
-        exit(-1);
-    }
-    fmtlen = *((uint32_t*)buf);
-
-    if (fread(buf, 1, 2, f) != 2) {
-        fprintf(stderr, "Failed reading header (type of format)\n");
-        exit(-1);
-    }
-    wav.formatty = *((uint16_t*)buf);
-
-    if (fread(buf, 1, 2, f) != 2) {
-        fprintf(stderr, "Failed reading header (number of channels)\n");
-        exit(-1);
-    }
-    wav.nchan = *((uint16_t*)buf);
-
-    if (fread(buf, 1, 4, f) != 4) {
-        fprintf(stderr, "Failed reading header (sample rate)\n");
-        exit(-1);
-    }
-    wav.samplert = *((uint32_t*)buf);
-
-    if (fread(buf, 1, 4, f) != 4) {
-        fprintf(stderr, "Failed reading header (bytes per second)\n");
-        exit(-1);
-    }
-    wav.bytes_per_sec = *((uint32_t*)buf);
-
-    if (fread(buf, 1, 2, f) != 2) {
-        fprintf(stderr, "Failed reading header (bytes per block)\n");
-        exit(-1);
-    }
-    wav.bytes_per_block = *((uint16_t*)buf);
-
-    if (fread(buf, 1, 2, f) != 2) {
-        fprintf(stderr, "Failed reading header (bits per sample)\n");
-        exit(-1);
-    }
-    wav.bits_per_sample = *((uint16_t*)buf);
-
-    memset(buf, 0, sizeof(buf));
-    pass_until("data", f);
-
-    if (fread(buf, 1, 4, f) != 4) {
-        fprintf(stderr, "Failed reading header (data size)\n");
-        exit(-1);
-    }
-    wav.datasz = *((uint32_t*)buf);
-
-    wav.data = calloc(wav.datasz, 1);
-
-    int b = 0;
-    for (size_t i = 1; i <= wav.datasz; i++) {
-        b = fgetc(f);
-        if (b == EOF) {
-            fprintf(stdout, "WARN: Data segment size does not match declared size\n");
-            break;
-        }
-        wav.data[i - 1] = (char)b;
-    }
-
-    fclose(f);
-    return wav;
-}
-
 const char* get_filename(const char* path)
 {
     size_t len = strlen(path);
@@ -162,6 +24,7 @@ const char* get_filename(const char* path)
     }
     return path + i;
 }
+
 static int* cmx_pre = NULL;
 static cmx* fft_input = NULL;
 static cmx* fft_output = NULL;
@@ -170,35 +33,92 @@ static unsigned int last_frames = 0;
 static size_t wav_data_ptr = 0;
 static size_t last_data_ptr = 0;
 static double max = WIDHT;
+static WaveFile audio_file = { 0 };
+static AudioStream audio_stream = { 0 };
+static int is_playing = 0;
+static char* message = NULL;
+
+void audio_input_callback(void* buf, unsigned int frames);
+
+static int try_load_wav(const char* path)
+{
+    if(is_playing){
+        UnloadAudioStream(audio_stream);
+        wav_data_ptr = 0;
+        wavefile_free(audio_file);
+        audio_file = (WaveFile){ 0 };
+    }
+    is_playing = 0;
+    if (IsPathFile(path)) {
+        if (message) {
+            free(message);
+            message = NULL;
+        }
+        if (!load_wav_file(path, &audio_file)) {
+            message = wav_get_error();
+            return 0;
+        } else {
+            const char* name = GetFileName(path);
+            message = calloc(strlen(name) + 1, sizeof(char));
+            strcpy(message, name);
+        }
+    }
+    audio_stream = LoadAudioStream(audio_file.samplert, audio_file.bits_per_sample, audio_file.nchan);
+    SetAudioStreamCallback(audio_stream, audio_input_callback);
+    PlayAudioStream(audio_stream);
+    is_playing = 1;
+
+    printf("WAV file\n"
+           "fsize: %d\n"
+           "formatty: %d\n"
+           "nchan: %d\n"
+           "samplert: %d\n"
+           "bytes_per_sec: %d\n"
+           "bytes_per_block: %d\n"
+           "bits_per_sample: %d\n"
+           "datasz: %d\n",
+        audio_file.fsize,
+        audio_file.formatty,
+        audio_file.nchan,
+        audio_file.samplert,
+        audio_file.bytes_per_sec,
+        audio_file.bytes_per_block,
+        audio_file.bits_per_sample,
+        audio_file.datasz);
+    return 1;
+}
+
 void audio_input_callback(void* buf, unsigned int frames)
 {
     unsigned char* d = buf;
     last_data_ptr = wav_data_ptr;
     for (size_t i = 0; i < frames; i++) {
-        memcpy(d + (i * AudioFile.bytes_per_block), AudioFile.data + wav_data_ptr, AudioFile.bytes_per_block);
+        memcpy(d + (i * audio_file.bytes_per_block), audio_file.data + wav_data_ptr, audio_file.bytes_per_block);
 
-        wav_data_ptr += AudioFile.bytes_per_block;
-        if (wav_data_ptr >= AudioFile.datasz)
+        wav_data_ptr += audio_file.bytes_per_block;
+        if (wav_data_ptr >= audio_file.datasz)
             wav_data_ptr = 0;
     }
     last_frames = frames;
 }
 void update(void)
 {
-    if (!last_frames || !cmx_pre)
+    if (IsFileDropped()) {
+        FilePathList pl = LoadDroppedFiles();
+        try_load_wav(pl.paths[0]);
+    }
+    if (!last_frames || !cmx_pre || !is_playing)
         return;
     size_t sample_rate = (last_frames / FFTSIZE);
     for (size_t i = 0; i < FFTSIZE && i < last_frames; i++) {
         // unsigned short v = *(unsigned short*)(AudioFile.data + last_data_ptr + (i * AudioFile.bytes_per_block * 8));
-        unsigned int v = *(unsigned int*)(AudioFile.data + last_data_ptr + (i * AudioFile.bytes_per_block * 32));
-        // printf("%u\n", v);
+        unsigned int v = *(unsigned int*)(audio_file.data + last_data_ptr + (i * audio_file.bytes_per_block * 32));
         fft_input[i] = cmx_re((double)v);
     }
     (void)cmx_fft2(fft_input, FFTSIZE, 0, cmx_pre, fft_output);
     for (size_t i = 0; i < FFTSIZE; i++) {
         cmx c = fft_output[i];
-        // double v = cmx_mod(c);
-        double v = cmx_mod(cmx_mul(c, cmx_re((i+1) * 0.5)));
+        double v = cmx_mod(cmx_mul(c, cmx_re((i + 1) * 0.5)));
         max = v > max ? v : max;
         fft_draw_data[i] = v;
     }
@@ -206,11 +126,18 @@ void update(void)
 }
 void draw(void)
 {
-    const float cw = (float)WIDHT / (float)((FFTSIZE) - 1);
-    for (size_t i = 0; i < (FFTSIZE) - 1; i++) {
+    Vector2 fnsz = MeasureTextEx(GetFontDefault(), message, 24, 10);
+    Vector2 fnpos = {
+        .x = WIDHT / 2.,
+        .y = HEIGHT / 2.
+    };
+    fnpos = Vector2Subtract(fnpos, Vector2Scale(fnsz, .5));
+    DrawTextEx(GetFontDefault(), message, fnpos, 24, 10, WHITE);
+    if(!is_playing) return;
+    const float cw = (float)WIDHT / (float)((FFTSIZE)-1);
+    for (size_t i = 0; i < (FFTSIZE)-1; i++) {
         double c = fft_draw_data[i + 1];
         double v = (c / max) * (double)HEIGHT;
-        // printf("%lf\n", v);
         Rectangle r = {
             .x = cw * i,
             .y = HEIGHT - v,
@@ -224,64 +151,30 @@ void draw(void)
 
 int main(int argc, char** args)
 {
-    if (argc != 2) {
-        fprintf(stderr, "Expected a .wav file path as an argument\n");
-        exit(-1);
-    }
-    WaveFile wav = load_wav_file(args[1]);
-    AudioFile = wav;
-    InitWindow(WIDHT, HEIGHT, "FFT TEST");
-    InitAudioDevice();
-    SetTargetFPS(FPS);
-    SetAudioStreamBufferSizeDefault(4096);
-
-    AudioStream stream = LoadAudioStream(wav.samplert, wav.bits_per_sample, wav.nchan);
-
-    SetAudioStreamCallback(stream, audio_input_callback);
-
     cmx_pre = cmx_precomp_reversed_bits(FFTSIZE);
     fft_input = calloc(FFTSIZE, sizeof(cmx));
     fft_output = calloc(FFTSIZE, sizeof(cmx));
     fft_draw_data = calloc(FFTSIZE, sizeof(double));
 
-    printf("WAV file\n"
-           "fsize: %d\n"
-           "formatty: %d\n"
-           "nchan: %d\n"
-           "samplert: %d\n"
-           "bytes_per_sec: %d\n"
-           "bytes_per_block: %d\n"
-           "bits_per_sample: %d\n"
-           "datasz: %d\n",
-        wav.fsize,
-        wav.formatty,
-        wav.nchan,
-        wav.samplert,
-        wav.bytes_per_sec,
-        wav.bytes_per_block,
-        wav.bits_per_sample,
-        wav.datasz);
-
-    const char* filename = get_filename(args[1]);
-    Vector2 fnsz = MeasureTextEx(GetFontDefault(), filename, 24, 10);
-    Vector2 fnpos = {
-        .x = WIDHT / 2.,
-        .y = HEIGHT / 2.
-    };
-    fnpos = Vector2Subtract(fnpos, Vector2Scale(fnsz, .5));
-    PlayAudioStream(stream);
+    InitWindow(WIDHT, HEIGHT, "FFT TEST");
+    InitAudioDevice();
+    SetTargetFPS(FPS);
+    SetAudioStreamBufferSizeDefault(4096);
+    if (argc == 2) {
+        char* path = args[1];
+        try_load_wav(path);
+    }
     while (!WindowShouldClose()) {
         update();
         BeginDrawing();
         ClearBackground(BLACK);
         draw();
-        DrawTextEx(GetFontDefault(), filename, fnpos, 24, 10, WHITE);
         EndDrawing();
     }
     free(fft_input);
     free(fft_output);
     free(fft_draw_data);
-    UnloadAudioStream(stream);
+    UnloadAudioStream(audio_stream);
     CloseAudioDevice();
     CloseWindow();
 
