@@ -67,15 +67,15 @@ static int try_load_wav(const char* path)
     PlayAudioStream(audio_stream);
     is_playing = 1;
 
-    TraceLog(LOG_INFO, "WAV file\n"
-                       "fsize: %d\n"
-                       "formatty: %d\n"
-                       "nchan: %d\n"
-                       "samplert: %d\n"
-                       "bytes_per_sec: %d\n"
-                       "bytes_per_block: %d\n"
-                       "bits_per_sample: %d\n"
-                       "datasz: %d\n",
+    TraceLog(LOG_INFO, "[WAV FILE]\n"
+                       "- File size: %d\n"
+                       "- Format type: %d\n"
+                       "- Number of channels: %d\n"
+                       "- Sample rate: %d\n"
+                       "- Bytes per second: %d\n"
+                       "- Bytes per block: %d\n"
+                       "- Bits per sample: %d\n"
+                       "- WAV data size: %d",
         audio_file.fsize,
         audio_file.formatty,
         audio_file.nchan,
@@ -102,6 +102,9 @@ void audio_input_callback(void* buf, unsigned int frames)
 }
 void update(void)
 {
+    if(IsWindowResized()) {
+        w_height = GetScreenHeight(), w_width = GetScreenWidth();
+    }
     if (IsFileDropped()) {
         FilePathList pl = LoadDroppedFiles();
         try_load_wav(pl.paths[0]);
@@ -178,6 +181,7 @@ int main(int argc, char** args)
     fft_draw_data = calloc(FFTSIZE, sizeof(double));
 
     InitWindow(w_width, w_height, "FFT TEST");
+    SetWindowState(FLAG_WINDOW_RESIZABLE);
     InitAudioDevice();
     SetTargetFPS(FPS);
     SetAudioStreamBufferSizeDefault(4096);
