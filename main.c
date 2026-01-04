@@ -11,8 +11,10 @@
 #define FPS 60
 #define WIDHT 800
 #define HEIGHT 600
-#define FFTSIZE 1 << 10
+#define FFTSIZE (1 << 10)
 
+static int w_width = WIDHT;
+static int w_height = HEIGHT;
 static int* cmx_pre = NULL;
 static cmx* fft_input = NULL;
 static cmx* fft_output = NULL;
@@ -20,7 +22,7 @@ static double* fft_draw_data = NULL;
 static unsigned int last_frames = 0;
 static size_t wav_data_ptr = 0;
 static size_t last_data_ptr = 0;
-static double max = WIDHT;
+static double max = 0;
 static WaveFile audio_file = { 0 };
 static AudioStream audio_stream = { 0 };
 static int is_playing = 0;
@@ -35,9 +37,9 @@ static int try_load_wav(const char* path)
         wav_data_ptr = 0;
         wavefile_free(audio_file);
         audio_file = (WaveFile) { 0 };
-        memset(fft_draw_data, 0, (FFTSIZE) * sizeof(double));
-        memset(fft_input, 0, (FFTSIZE) * sizeof(cmx));
-        memset(fft_draw_data, 0, (FFTSIZE) * sizeof(cmx));
+        memset(fft_draw_data, 0, FFTSIZE * sizeof(double));
+        memset(fft_input, 0, FFTSIZE * sizeof(cmx));
+        memset(fft_draw_data, 0, FFTSIZE * sizeof(cmx));
         max = 0.0;
     }
     is_playing = 0;
@@ -108,7 +110,7 @@ void update(void)
     if (!last_frames || !cmx_pre || !is_playing)
         return;
     size_t sample_rate = audio_file.bytes_per_block * 2;
-    for (size_t i = 0; i < (FFTSIZE); i++) {
+    for (size_t i = 0; i < FFTSIZE; i++) {
         double v = 0;
         long int left = 0;
         long int right = 0;
@@ -134,7 +136,7 @@ void update(void)
         fft_input[i] = cmx_re(v);
     }
     (void)cmx_fft2(fft_input, FFTSIZE, 0, cmx_pre, fft_output);
-    for (size_t i = 0; i < (FFTSIZE); i++) {
+    for (size_t i = 0; i < FFTSIZE; i++) {
         cmx c = fft_output[i];
         // double v = cmx_mod(cmx_mul(c, cmx_re((i + 1) * 0.5)));
         double v = cmx_mod(c);
@@ -146,21 +148,21 @@ void draw(void)
 {
     Vector2 fnsz = MeasureTextEx(GetFontDefault(), message, 24, 10);
     Vector2 fnpos = {
-        .x = WIDHT / 2.,
-        .y = HEIGHT / 2.
+        .x = w_width / 2.,
+        .y = w_height / 2.
     };
     fnpos = Vector2Subtract(fnpos, Vector2Scale(fnsz, .5));
     DrawTextEx(GetFontDefault(), message, fnpos, 24, 10, WHITE);
     if (!is_playing)
         return;
-    const float cw = (float)WIDHT / (float)((FFTSIZE) / 2.);
-    const size_t whole = (FFTSIZE) / 2;
+    const float cw = (float)w_width / (float)(FFTSIZE / 2.);
+    const size_t whole = FFTSIZE / 2;
     for (size_t i = 0; i < whole; i++) {
         double c = fft_draw_data[i];
-        double v = (c / max) * (double)HEIGHT;
+        double v = (c / max) * (double)w_height;
         Rectangle r = {
             .x = cw * i,
-            .y = HEIGHT - v,
+            .y = w_height - v,
             .width = cw,
             .height = v,
         };
@@ -175,7 +177,7 @@ int main(int argc, char** args)
     fft_output = calloc(FFTSIZE, sizeof(cmx));
     fft_draw_data = calloc(FFTSIZE, sizeof(double));
 
-    InitWindow(WIDHT, HEIGHT, "FFT TEST");
+    InitWindow(w_width, w_height, "FFT TEST");
     InitAudioDevice();
     SetTargetFPS(FPS);
     SetAudioStreamBufferSizeDefault(4096);
