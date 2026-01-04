@@ -199,6 +199,8 @@ int main(int argc, char** args)
     free(fft_input);
     free(fft_output);
     free(fft_draw_data);
+    free(cmx_pre);
+    if(message) free(message);
     UnloadAudioStream(audio_stream);
     CloseAudioDevice();
     CloseWindow();
