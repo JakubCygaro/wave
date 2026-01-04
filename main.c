@@ -54,7 +54,7 @@ static int try_load_wav(const char* path)
             message = calloc(strlen(name) + 1, sizeof(char));
             strcpy(message, name);
         }
-        if (audio_file.formatty != 1){
+        if (audio_file.formatty != 1) {
             const char* msg = "unsupported format (compression)";
             message = calloc(strlen(msg) + 1, sizeof(char));
             strcpy(message, msg);
@@ -154,7 +154,8 @@ void draw(void)
     if (!is_playing)
         return;
     const float cw = (float)WIDHT / (float)((FFTSIZE) / 2.);
-    for (size_t i = 0; i < (FFTSIZE) / 2; i++) {
+    const size_t whole = (FFTSIZE) / 2;
+    for (size_t i = 0; i < whole; i++) {
         double c = fft_draw_data[i];
         double v = (c / max) * (double)HEIGHT;
         Rectangle r = {
@@ -163,7 +164,7 @@ void draw(void)
             .width = cw,
             .height = v,
         };
-        DrawRectangleRec(r, RED);
+        DrawRectangleRec(r, ColorFromHSV(((float)i / (float)whole) * 360., 1.0, 1.0));
     }
 }
 
