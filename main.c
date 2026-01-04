@@ -47,6 +47,10 @@ static int try_load_wav(const char* path)
         wav_data_ptr = 0;
         wavefile_free(audio_file);
         audio_file = (WaveFile){ 0 };
+        memset(fft_draw_data, 0, (FFTSIZE) * sizeof(double));
+        memset(fft_input, 0, (FFTSIZE) * sizeof(cmx));
+        memset(fft_draw_data, 0, (FFTSIZE) * sizeof(cmx));
+        max = 0.0;
     }
     is_playing = 0;
     if (IsPathFile(path)) {
@@ -106,23 +110,25 @@ void update(void)
     if (IsFileDropped()) {
         FilePathList pl = LoadDroppedFiles();
         try_load_wav(pl.paths[0]);
+        UnloadDroppedFiles(pl);
     }
     if (!last_frames || !cmx_pre || !is_playing)
         return;
     size_t sample_rate = (last_frames / FFTSIZE);
     for (size_t i = 0; i < FFTSIZE && i < last_frames; i++) {
         // unsigned short v = *(unsigned short*)(AudioFile.data + last_data_ptr + (i * AudioFile.bytes_per_block * 8));
-        unsigned int v = *(unsigned int*)(audio_file.data + last_data_ptr + (i * audio_file.bytes_per_block * 32));
+        int v = *(int*)(audio_file.data + last_data_ptr + (i * audio_file.bytes_per_block * 32));
         fft_input[i] = cmx_re((double)v);
     }
     (void)cmx_fft2(fft_input, FFTSIZE, 0, cmx_pre, fft_output);
     for (size_t i = 0; i < FFTSIZE; i++) {
         cmx c = fft_output[i];
-        double v = cmx_mod(cmx_mul(c, cmx_re((i + 1) * 0.5)));
+        // double v = cmx_mod(cmx_mul(c, cmx_re((i + 1) * 0.5)));
+        double v = cmx_mod(c);
         max = v > max ? v : max;
         fft_draw_data[i] = v;
     }
-    max *= 1.05;
+    // max *= 1.05;
 }
 void draw(void)
 {
@@ -146,7 +152,7 @@ void draw(void)
         };
         DrawRectangleRec(r, RED);
     }
-    max = 0.0;
+    // max = 0.0;
 }
 
 int main(int argc, char** args)
