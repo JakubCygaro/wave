@@ -177,7 +177,7 @@ int cmx_rev2(int array_sz, int n)
 int* cmx_precomp_reversed_bits(int max)
 {
     int* ret = calloc(max, sizeof(int));
-    for (size_t k = 0; k < max; k++) {
+    for (size_t k = 0; k < (size_t)max; k++) {
         ret[k] = cmx_rev2(max, k);
     }
     return ret;
@@ -195,7 +195,7 @@ static cmx* cmx_bit_reverse_copy(const cmx* a, size_t n, const int* precomp_bitr
 cmx* cmx_fft2(const cmx* x, size_t n, double step, const int* precomp_bitr, cmx* write_to)
 {
     cmx* out = cmx_bit_reverse_copy(x, n, precomp_bitr, write_to);
-    for (size_t s = 1; s <= cmx_log2i(n); s++) {
+    for (size_t s = 1; s <= (size_t)cmx_log2i(n); s++) {
         size_t m = pow(2, s);
         cmx w_m = cmx_exp(
             cmx_div(

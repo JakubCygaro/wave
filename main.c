@@ -11,19 +11,7 @@
 #define FPS 60
 #define WIDHT 800
 #define HEIGHT 600
-#define FFTSIZE 1 << 9
-
-const char* get_filename(const char* path)
-{
-    size_t len = strlen(path);
-    size_t i = len;
-    for (; i > 0; i--) {
-        if (path[i - 1] == '/' || path[i - 1] == '\\') {
-            break;
-        }
-    }
-    return path + i;
-}
+#define FFTSIZE 1 << 10
 
 static int* cmx_pre = NULL;
 static cmx* fft_input = NULL;
@@ -42,11 +30,11 @@ void audio_input_callback(void* buf, unsigned int frames);
 
 static int try_load_wav(const char* path)
 {
-    if(is_playing){
+    if (is_playing) {
         UnloadAudioStream(audio_stream);
         wav_data_ptr = 0;
         wavefile_free(audio_file);
-        audio_file = (WaveFile){ 0 };
+        audio_file = (WaveFile) { 0 };
         memset(fft_draw_data, 0, (FFTSIZE) * sizeof(double));
         memset(fft_input, 0, (FFTSIZE) * sizeof(cmx));
         memset(fft_draw_data, 0, (FFTSIZE) * sizeof(cmx));
@@ -66,21 +54,26 @@ static int try_load_wav(const char* path)
             message = calloc(strlen(name) + 1, sizeof(char));
             strcpy(message, name);
         }
+        if (audio_file.formatty != 1){
+            const char* msg = "unsupported format (compression)";
+            message = calloc(strlen(msg) + 1, sizeof(char));
+            strcpy(message, msg);
+        }
     }
     audio_stream = LoadAudioStream(audio_file.samplert, audio_file.bits_per_sample, audio_file.nchan);
     SetAudioStreamCallback(audio_stream, audio_input_callback);
     PlayAudioStream(audio_stream);
     is_playing = 1;
 
-    printf("WAV file\n"
-           "fsize: %d\n"
-           "formatty: %d\n"
-           "nchan: %d\n"
-           "samplert: %d\n"
-           "bytes_per_sec: %d\n"
-           "bytes_per_block: %d\n"
-           "bits_per_sample: %d\n"
-           "datasz: %d\n",
+    TraceLog(LOG_INFO, "WAV file\n"
+                       "fsize: %d\n"
+                       "formatty: %d\n"
+                       "nchan: %d\n"
+                       "samplert: %d\n"
+                       "bytes_per_sec: %d\n"
+                       "bytes_per_block: %d\n"
+                       "bits_per_sample: %d\n"
+                       "datasz: %d\n",
         audio_file.fsize,
         audio_file.formatty,
         audio_file.nchan,
@@ -114,21 +107,40 @@ void update(void)
     }
     if (!last_frames || !cmx_pre || !is_playing)
         return;
-    size_t sample_rate = (last_frames / FFTSIZE);
-    for (size_t i = 0; i < FFTSIZE && i < last_frames; i++) {
-        // unsigned short v = *(unsigned short*)(AudioFile.data + last_data_ptr + (i * AudioFile.bytes_per_block * 8));
-        int v = *(int*)(audio_file.data + last_data_ptr + (i * audio_file.bytes_per_block * 32));
-        fft_input[i] = cmx_re((double)v);
+    size_t sample_rate = audio_file.bytes_per_block * 2;
+    for (size_t i = 0; i < (FFTSIZE); i++) {
+        double v = 0;
+        long int left = 0;
+        long int right = 0;
+        uint16_t nchan = audio_file.nchan;
+        switch (audio_file.bytes_per_block) {
+        case 2: {
+            unsigned char* left_p = (unsigned char*)(audio_file.data + last_data_ptr + (i * audio_file.bytes_per_block * sample_rate));
+            left = *left_p;
+            right = (nchan == 2) ? *(left_p + 1) : left;
+        } break;
+        case 4: {
+            short* left_p = (short*)(audio_file.data + last_data_ptr + (i * audio_file.bytes_per_block * sample_rate));
+            left = *left_p;
+            right = (nchan == 2) ? *(left_p + 1) : left;
+        } break;
+        case 8: {
+            int* left_p = (int*)(audio_file.data + last_data_ptr + (i * audio_file.bytes_per_block * sample_rate));
+            left = *left_p;
+            right = (nchan == 2) ? *(left_p + 1) : left;
+        } break;
+        }
+        v = ((double)left + (double)right) * 0.5f / (500.f);
+        fft_input[i] = cmx_re(v);
     }
     (void)cmx_fft2(fft_input, FFTSIZE, 0, cmx_pre, fft_output);
-    for (size_t i = 0; i < FFTSIZE; i++) {
+    for (size_t i = 0; i < (FFTSIZE); i++) {
         cmx c = fft_output[i];
         // double v = cmx_mod(cmx_mul(c, cmx_re((i + 1) * 0.5)));
         double v = cmx_mod(c);
         max = v > max ? v : max;
         fft_draw_data[i] = v;
     }
-    // max *= 1.05;
 }
 void draw(void)
 {
@@ -139,10 +151,11 @@ void draw(void)
     };
     fnpos = Vector2Subtract(fnpos, Vector2Scale(fnsz, .5));
     DrawTextEx(GetFontDefault(), message, fnpos, 24, 10, WHITE);
-    if(!is_playing) return;
-    const float cw = (float)WIDHT / (float)((FFTSIZE)-1);
-    for (size_t i = 0; i < (FFTSIZE)-1; i++) {
-        double c = fft_draw_data[i + 1];
+    if (!is_playing)
+        return;
+    const float cw = (float)WIDHT / (float)((FFTSIZE) / 2.);
+    for (size_t i = 0; i < (FFTSIZE) / 2; i++) {
+        double c = fft_draw_data[i];
         double v = (c / max) * (double)HEIGHT;
         Rectangle r = {
             .x = cw * i,
@@ -152,7 +165,6 @@ void draw(void)
         };
         DrawRectangleRec(r, RED);
     }
-    // max = 0.0;
 }
 
 int main(int argc, char** args)
