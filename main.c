@@ -12,9 +12,11 @@
 #define WIDHT 800
 #define HEIGHT 600
 #define FFTSIZE (1 << 10)
+#define PROGRESS_BAR_H (1. / 18.)
 
 static int w_width = WIDHT;
 static int w_height = HEIGHT;
+static float pb_height = PROGRESS_BAR_H * HEIGHT;
 static int* cmx_pre = NULL;
 static cmx* fft_input = NULL;
 static cmx* fft_output = NULL;
@@ -100,10 +102,26 @@ void audio_input_callback(void* buf, unsigned int frames)
     }
     last_frames = frames;
 }
+
+void update_progress_bar(void)
+{
+    if (!IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+        return;
+    const size_t whole = audio_file.datasz;
+    const float h = PROGRESS_BAR_H * w_height;
+    Rectangle r = { .x = 0.0, .y = w_height - h, .width = w_width, .height = h };
+    Vector2 mouse = GetMousePosition();
+    if(!CheckCollisionPointRec(mouse, r)) return;
+    const float ratio = (float)mouse.x / (float)w_width;
+    size_t pos = whole * ratio;
+    pos -= (pos % audio_file.bytes_per_sec);
+    wav_data_ptr = pos;
+}
 void update(void)
 {
-    if(IsWindowResized()) {
+    if (IsWindowResized()) {
         w_height = GetScreenHeight(), w_width = GetScreenWidth();
+        pb_height = PROGRESS_BAR_H * w_height;
     }
     if (IsFileDropped()) {
         FilePathList pl = LoadDroppedFiles();
@@ -112,6 +130,8 @@ void update(void)
     }
     if (!last_frames || !cmx_pre || !is_playing)
         return;
+    update_progress_bar();
+
     size_t sample_rate = audio_file.bytes_per_block * 2;
     for (size_t i = 0; i < FFTSIZE; i++) {
         double v = 0;
@@ -139,6 +159,7 @@ void update(void)
         fft_input[i] = cmx_re(v);
     }
     (void)cmx_fft2(fft_input, FFTSIZE, 0, cmx_pre, fft_output);
+    max = 0.0;
     for (size_t i = 0; i < FFTSIZE; i++) {
         cmx c = fft_output[i];
         // double v = cmx_mod(cmx_mul(c, cmx_re((i + 1) * 0.5)));
@@ -146,6 +167,17 @@ void update(void)
         max = v > max ? v : max;
         fft_draw_data[i] = v;
     }
+}
+void draw_progress_bar(void)
+{
+    const size_t whole = audio_file.datasz;
+    const float ratio = (float)wav_data_ptr / (float)whole;
+    const float pos = w_width * ratio;
+    const float h = PROGRESS_BAR_H * w_height;
+    DrawRectangleV(
+        (Vector2) { .x = 0.0, .y = w_height - h },
+        (Vector2) { .x = pos, .y = h },
+        WHITE);
 }
 void draw(void)
 {
@@ -158,14 +190,16 @@ void draw(void)
     DrawTextEx(GetFontDefault(), message, fnpos, 24, 10, WHITE);
     if (!is_playing)
         return;
+    draw_progress_bar();
     const float cw = (float)w_width / (float)(FFTSIZE / 2.);
     const size_t whole = FFTSIZE / 2;
+    const double total_height = (double)(w_height - pb_height);
     for (size_t i = 0; i < whole; i++) {
         double c = fft_draw_data[i];
-        double v = (c / max) * (double)w_height;
+        double v = (c / max) * total_height;
         Rectangle r = {
             .x = cw * i,
-            .y = w_height - v,
+            .y = total_height - v,
             .width = cw,
             .height = v,
         };
@@ -200,7 +234,8 @@ int main(int argc, char** args)
     free(fft_output);
     free(fft_draw_data);
     free(cmx_pre);
-    if(message) free(message);
+    if (message)
+        free(message);
     UnloadAudioStream(audio_stream);
     CloseAudioDevice();
     CloseWindow();
