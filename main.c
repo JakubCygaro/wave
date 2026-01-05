@@ -205,6 +205,18 @@ void draw_progress_bar(void)
         (Vector2) { .x = 0.0, .y = w_height - h },
         (Vector2) { .x = pos, .y = h },
         WHITE);
+    static char time[32] = { 0 };
+    const size_t elapsed = (wav_data_ptr / audio_file.bytes_per_sec);
+    sprintf(time, "%02ld:%02ld",
+        elapsed / 60,
+        elapsed % 60);
+    Vector2 sz = MeasureTextEx(GetFontDefault(), time, 16, 10);
+    DrawTextEx(GetFontDefault(),
+        time,
+        (Vector2) { .x = (w_width / 2.) - (sz.x / 2.), .y = (w_height - h + h / 2.0) - (sz.y / 2.) },
+        16,
+        10,
+        GRAY);
 }
 void draw(void)
 {
@@ -232,7 +244,8 @@ void draw(void)
             DrawRectangleRec(r, ColorFromHSV(((float)i / (float)whole) * 360., 1.0, 1.0));
         }
     }
-    if(message) DrawTextEx(GetFontDefault(), message, fnpos, 24, 10, WHITE);
+    if (message)
+        DrawTextEx(GetFontDefault(), message, fnpos, 24, 10, WHITE);
 }
 
 int main(int argc, char** args)
