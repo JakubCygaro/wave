@@ -1,5 +1,6 @@
 #ifndef COMPLEX_H
 #define COMPLEX_H
+#include <stdlib.h>
 typedef struct {
     double re;
     double im;
@@ -31,13 +32,12 @@ double cmx_mod(cmx z);
 cmx cmx_recip(cmx z);
 double cmx_arg(cmx z);
 cmx cmx_rand(void);
-cmx* cmx_fft2(const cmx* x, unsigned long n, double step, const int* precomp_bitr, cmx* write_to);
+cmx* cmx_fft2(const cmx* x, size_t n, double step, const int* precomp_bitr, cmx* write_to);
 int* cmx_precomp_reversed_bits(int max);
 int cmx_rev2(int array_sz, int n);
 int cmx_log2i(int n);
 #ifdef COMPLEX_IMPL
 #include <math.h>
-#include <stdlib.h>
 cmx cmx_im(double im)
 {
     return (cmx) {
