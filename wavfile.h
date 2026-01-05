@@ -14,6 +14,8 @@ typedef struct {
     uint16_t bytes_per_block;
     uint16_t bits_per_sample;
     uint32_t datasz;
+    /// the length of the audio contents in seconds
+    uint64_t audio_time;
     char* data;
 } WaveFile;
 

@@ -73,14 +73,15 @@ static int try_load_wav(const char* path)
     is_playing = 1;
 
     TraceLog(LOG_INFO, "[WAV FILE]\n"
-                       "- File size: %d\n"
+                       "- File size: %d bytes\n"
                        "- Format type: %d\n"
                        "- Number of channels: %d\n"
-                       "- Sample rate: %d\n"
+                       "- Sample rate: %d Hz\n"
                        "- Bytes per second: %d\n"
                        "- Bytes per block: %d\n"
                        "- Bits per sample: %d\n"
-                       "- WAV data size: %d",
+                       "- WAV data size: %d bytes\n"
+                       "- Audio length: %02ld:%02ld",
         audio_file.fsize,
         audio_file.formatty,
         audio_file.nchan,
@@ -88,7 +89,9 @@ static int try_load_wav(const char* path)
         audio_file.bytes_per_sec,
         audio_file.bytes_per_block,
         audio_file.bits_per_sample,
-        audio_file.datasz);
+        audio_file.datasz,
+        audio_file.audio_time / 60,
+        audio_file.audio_time % 60);
     return 1;
 }
 

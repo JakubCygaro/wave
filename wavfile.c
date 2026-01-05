@@ -130,7 +130,7 @@ int load_wav_file(const char* path, WaveFile* wav)
         if (b == EOF) break;
         wav->data[i - 1] = (char)b;
     }
-
+    wav->audio_time = wav->datasz / wav->bytes_per_sec;
     fclose(f);
     return 1;
 }
