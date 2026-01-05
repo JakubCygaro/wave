@@ -4,7 +4,7 @@ LINKFLAGS = -lraylib -lm
 all: wave
 
 wave: main.o wavfile.c
-	gcc $(LINKFLAGS) $^ -o $@
+	gcc $^ $(LINKFLAGS) -o $@
 
 main.o: main.c
 	gcc -c $(COMPILEFLAGS) $^
