@@ -29,6 +29,8 @@ static WaveFile audio_file = { 0 };
 static AudioStream audio_stream = { 0 };
 static int is_playing = 0;
 static char* message = NULL;
+static float volume = 1.0;
+static double volume_draw_t = 0.0;
 
 void audio_input_callback(void* buf, unsigned int frames);
 
@@ -52,9 +54,10 @@ static int try_load_wav(const char* path)
         }
         if (!load_wav_file(path, &audio_file)) {
             message = wav_get_error();
+            printf("ERROR: %s\n", message);
             return 0;
         } else {
-            const char* name = GetFileName(path);
+            const char* name = GetFileNameWithoutExt(path);
             message = calloc(strlen(name) + 1, sizeof(char));
             strcpy(message, name);
         }
@@ -102,6 +105,16 @@ void audio_input_callback(void* buf, unsigned int frames)
     }
     last_frames = frames;
 }
+void update_volume(void)
+{
+    Vector2 wheel = GetMouseWheelMoveV();
+    if (wheel.y == 0.0)
+        return;
+    volume += wheel.y * .1f;
+    volume = Clamp(volume, 0.0, 1.0);
+    SetAudioStreamVolume(audio_stream, volume);
+    volume_draw_t = GetTime() + 3.;
+}
 
 void update_progress_bar(void)
 {
@@ -111,7 +124,8 @@ void update_progress_bar(void)
     const float h = PROGRESS_BAR_H * w_height;
     Rectangle r = { .x = 0.0, .y = w_height - h, .width = w_width, .height = h };
     Vector2 mouse = GetMousePosition();
-    if(!CheckCollisionPointRec(mouse, r)) return;
+    if (!CheckCollisionPointRec(mouse, r))
+        return;
     const float ratio = (float)mouse.x / (float)w_width;
     size_t pos = whole * ratio;
     pos -= (pos % audio_file.bytes_per_sec);
@@ -131,6 +145,7 @@ void update(void)
     if (!last_frames || !cmx_pre || !is_playing)
         return;
     update_progress_bar();
+    update_volume();
 
     size_t sample_rate = audio_file.bytes_per_block * 2;
     for (size_t i = 0; i < FFTSIZE; i++) {
@@ -167,6 +182,15 @@ void update(void)
         max = v > max ? v : max;
         fft_draw_data[i] = v;
     }
+    max *= 1.02;
+}
+void draw_volume(void)
+{
+    if (GetTime() > volume_draw_t)
+        return;
+    static char buf[32] = { 0 };
+    sprintf(buf, "vol: %.1f", volume);
+    DrawText(buf, 0, 0, 30, WHITE);
 }
 void draw_progress_bar(void)
 {
@@ -187,24 +211,25 @@ void draw(void)
         .y = w_height / 2.
     };
     fnpos = Vector2Subtract(fnpos, Vector2Scale(fnsz, .5));
-    DrawTextEx(GetFontDefault(), message, fnpos, 24, 10, WHITE);
-    if (!is_playing)
-        return;
-    draw_progress_bar();
-    const float cw = (float)w_width / (float)(FFTSIZE / 2.);
-    const size_t whole = FFTSIZE / 2;
-    const double total_height = (double)(w_height - pb_height);
-    for (size_t i = 0; i < whole; i++) {
-        double c = fft_draw_data[i];
-        double v = (c / max) * total_height;
-        Rectangle r = {
-            .x = cw * i,
-            .y = total_height - v,
-            .width = cw,
-            .height = v,
-        };
-        DrawRectangleRec(r, ColorFromHSV(((float)i / (float)whole) * 360., 1.0, 1.0));
+    if (is_playing) {
+        draw_progress_bar();
+        draw_volume();
+        const float cw = (float)w_width / (float)(FFTSIZE / 2.);
+        const size_t whole = FFTSIZE / 2;
+        const double total_height = (double)(w_height - pb_height);
+        for (size_t i = 0; i < whole; i++) {
+            double c = fft_draw_data[i];
+            double v = (c / max) * total_height;
+            Rectangle r = {
+                .x = cw * i,
+                .y = total_height - v,
+                .width = cw,
+                .height = v,
+            };
+            DrawRectangleRec(r, ColorFromHSV(((float)i / (float)whole) * 360., 1.0, 1.0));
+        }
     }
+    if(message) DrawTextEx(GetFontDefault(), message, fnpos, 24, 10, WHITE);
 }
 
 int main(int argc, char** args)
@@ -230,12 +255,12 @@ int main(int argc, char** args)
         draw();
         EndDrawing();
     }
-    free(fft_input);
-    free(fft_output);
-    free(fft_draw_data);
-    free(cmx_pre);
-    if (message)
-        free(message);
+    // free(fft_input);
+    // free(fft_output);
+    // free(fft_draw_data);
+    // free(cmx_pre);
+    // if (message)
+    //     free(message);
     UnloadAudioStream(audio_stream);
     CloseAudioDevice();
     CloseWindow();

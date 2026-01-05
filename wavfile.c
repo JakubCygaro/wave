@@ -7,8 +7,9 @@
 static char _wav_error[128] = { 0 };
 
 char* wav_get_error(){
-    if(!(*_wav_error)) return NULL;
+    if(_wav_error[0] == '\0') return NULL;
     char* ret = calloc(strlen(_wav_error) + 1, sizeof(char));
+    strcpy(ret, _wav_error);
     memset(_wav_error, 0, sizeof(_wav_error) / sizeof(char));
     return ret;
 }
