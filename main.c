@@ -1,3 +1,4 @@
+// #include "font.h"
 #include "wavfile.h"
 #include <raylib.h>
 #include <raymath.h>
@@ -13,6 +14,9 @@
 #define HEIGHT 600
 #define FFTSIZE (1 << 10)
 #define PROGRESS_BAR_H (1. / 18.)
+#define GROUPING_FACTOR (1 << 2)
+#define COLUMN_COUNT (FFTSIZE / 2 / GROUPING_FACTOR)
+#define SMOOTHING .5f
 
 static int w_width = WIDHT;
 static int w_height = HEIGHT;
@@ -31,6 +35,7 @@ static int is_playing = 0;
 static char* message = NULL;
 static float volume = 1.0;
 static double volume_draw_t = 0.0;
+// static Font font = { 0 };
 
 void audio_input_callback(void* buf, unsigned int frames);
 
@@ -173,19 +178,29 @@ void update(void)
             right = (nchan == 2) ? *(left_p + 1) : left;
         } break;
         }
-        v = ((double)left + (double)right) * 0.5f / (500.f);
+        v = ((double)left + (double)right) * 0.5f / (1000.f);
         fft_input[i] = cmx_re(v);
     }
     (void)cmx_fft2(fft_input, FFTSIZE, 0, cmx_pre, fft_output);
-    max = 0.0;
-    for (size_t i = 0; i < FFTSIZE; i++) {
-        cmx c = fft_output[i];
+    // max = 0.0;
+    // https://stackoverflow.com/a/20584591
+    for (size_t i = 0; i < FFTSIZE / 2; i += GROUPING_FACTOR) {
+        double v = 0.0;
+        for (size_t j = 0; j < GROUPING_FACTOR; j++){
+            double tmp = cmx_mod(fft_output[i + j]);
+            tmp = SMOOTHING * fft_draw_data[i / GROUPING_FACTOR] + ((1 - SMOOTHING) * tmp);
+            // tmp = 10 * log10(pow(tmp, 2));
+            // Hamming window It doesn't really look that good tbh
+            // const double a_0 = 0.54;
+            // tmp *= a_0 - (1 - a_0) * cos((2 * M_PI * (j + i)) / (FFTSIZE / 2.));
+            v += tmp;
+        }
+        v /= GROUPING_FACTOR;
         // double v = cmx_mod(cmx_mul(c, cmx_re((i + 1) * 0.5)));
-        double v = cmx_mod(c);
         max = v > max ? v : max;
-        fft_draw_data[i] = v;
+        fft_draw_data[i / GROUPING_FACTOR] = v;
     }
-    max *= 1.02;
+    // max *= 1.02;
 }
 void draw_volume(void)
 {
@@ -229,16 +244,16 @@ void draw(void)
     if (is_playing) {
         draw_progress_bar();
         draw_volume();
-        const float cw = (float)w_width / (float)(FFTSIZE / 2.);
-        const size_t whole = FFTSIZE / 2;
+        const float col_width = (float)w_width / (float)(COLUMN_COUNT);
+        const size_t whole = COLUMN_COUNT;
         const double total_height = (double)(w_height - pb_height);
         for (size_t i = 0; i < whole; i++) {
             double c = fft_draw_data[i];
             double v = (c / max) * total_height;
             Rectangle r = {
-                .x = cw * i,
+                .x = col_width * i,
                 .y = total_height - v,
-                .width = cw,
+                .width = col_width,
                 .height = v,
             };
             DrawRectangleRec(r, ColorFromHSV(((float)i / (float)whole) * 360., 1.0, 1.0));
@@ -253,13 +268,14 @@ int main(int argc, char** args)
     cmx_pre = cmx_precomp_reversed_bits(FFTSIZE);
     fft_input = calloc(FFTSIZE, sizeof(cmx));
     fft_output = calloc(FFTSIZE, sizeof(cmx));
-    fft_draw_data = calloc(FFTSIZE, sizeof(double));
+    fft_draw_data = calloc(COLUMN_COUNT, sizeof(double));
 
     InitWindow(w_width, w_height, "FFT TEST");
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     InitAudioDevice();
     SetTargetFPS(FPS);
     SetAudioStreamBufferSizeDefault(4096);
+    // font = LoadFontFromMemory(font_get_format(), font_get_data_ptr(), font_get_data_size(), 100, NULL, 0);
     if (argc == 2) {
         char* path = args[1];
         try_load_wav(path);
