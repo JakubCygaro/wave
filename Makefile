@@ -1,4 +1,4 @@
-COMPILEFLAGS = -g -Wall -Wextra
+COMPILEFLAGS = -O3 -Wall -Wextra
 LINKFLAGS = -lraylib -lm
 
 all: wave

@@ -79,6 +79,7 @@ static int try_load_wav(const char* path)
     }
     audio_stream = LoadAudioStream(audio_file.samplert, audio_file.bits_per_sample, audio_file.nchan);
     SetAudioStreamCallback(audio_stream, audio_input_callback);
+    SetAudioStreamVolume(audio_stream, volume);
     PlayAudioStream(audio_stream);
     is_playing = 1;
 
@@ -193,7 +194,7 @@ void update(void)
         fft_input[i] = cmx_re(v);
     }
     (void)cmx_fft2(fft_input, FFTSIZE, 0, cmx_pre, fft_output);
-    // max = 0.0;
+    max = 0.0;
     // https://stackoverflow.com/a/20584591
     for (size_t i = 0; i < FFTSIZE / 2; i += GROUPING_FACTOR) {
         double v = 0.0;
@@ -211,7 +212,7 @@ void update(void)
         min = v < min ? v : min;
         fft_draw_data[i / GROUPING_FACTOR] = v;
     }
-    // max *= 1.02;
+    max *= 1.02;
 }
 void draw_volume(void)
 {
@@ -256,8 +257,6 @@ void draw_message(void)
 void draw(void)
 {
     if (is_playing) {
-        draw_progress_bar();
-        draw_volume();
         const float col_width = (float)w_width / (float)(COLUMN_COUNT);
         const size_t whole = COLUMN_COUNT;
         const double total_height = (double)(w_height - pb_height);
@@ -272,6 +271,8 @@ void draw(void)
             };
             DrawRectangleRec(r, ColorFromHSV(((float)i / (float)whole) * 360., 1.0, 1.0));
         }
+        draw_progress_bar();
+        draw_volume();
     }
     if (message)
         draw_message();
