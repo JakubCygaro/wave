@@ -29,6 +29,7 @@ static unsigned int last_frames = 0;
 static size_t wav_data_ptr = 0;
 static size_t last_data_ptr = 0;
 static double max = 0;
+static double min = 0;
 static WaveFile audio_file = { 0 };
 static AudioStream audio_stream = { 0 };
 static int is_playing = 0;
@@ -50,6 +51,7 @@ static int try_load_wav(const char* path)
         memset(fft_input, 0, FFTSIZE * sizeof(cmx));
         memset(fft_draw_data, 0, FFTSIZE * sizeof(cmx));
         max = 0.0;
+        min = 0.0;
     }
     is_playing = 0;
     if (IsPathFile(path)) {
@@ -198,6 +200,7 @@ void update(void)
         v /= GROUPING_FACTOR;
         // double v = cmx_mod(cmx_mul(c, cmx_re((i + 1) * 0.5)));
         max = v > max ? v : max;
+        min = v < min ? v : min;
         fft_draw_data[i / GROUPING_FACTOR] = v;
     }
     // max *= 1.02;

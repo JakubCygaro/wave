@@ -76,6 +76,7 @@ int load_wav_file(const char* path, WaveFile* wav)
         return 0;
     }
     fmtlen = *((uint32_t*)buf);
+    (void)fmtlen;
 
     if (fread(buf, 1, 2, f) != 2) {
         sprintf(_wav_error, "Failed reading header (type of format)\n");
