@@ -3,7 +3,7 @@ LINKFLAGS = -lraylib -lm
 
 all: wave
 
-wave: main.o wavfile.c
+wave: main.o wavfile.o
 	gcc $^ $(LINKFLAGS) -o $@
 
 main.o: main.c
