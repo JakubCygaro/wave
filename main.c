@@ -34,6 +34,7 @@ static WaveFile audio_file = { 0 };
 static AudioStream audio_stream = { 0 };
 static int is_playing = 0;
 static char* message = NULL;
+static Vector2 message_sz = { 0 };
 static float volume = 1.0;
 static double volume_draw_t = 0.0;
 // static Font font = { 0 };
@@ -49,7 +50,7 @@ static int try_load_wav(const char* path)
         audio_file = (WaveFile) { 0 };
         memset(fft_draw_data, 0, FFTSIZE * sizeof(double));
         memset(fft_input, 0, FFTSIZE * sizeof(cmx));
-        memset(fft_draw_data, 0, FFTSIZE * sizeof(cmx));
+        memset(fft_output, 0, FFTSIZE * sizeof(cmx));
         max = 0.0;
         min = 0.0;
     }
@@ -61,7 +62,8 @@ static int try_load_wav(const char* path)
         }
         if (!load_wav_file(path, &audio_file)) {
             message = wav_get_error();
-            printf("ERROR: %s\n", message);
+            TraceLog(LOG_ERROR, "Error while trying to load wav file:\n", message);
+            TraceLog(LOG_ERROR, "%s\n", message);
             return 0;
         } else {
             const char* name = GetFileNameWithoutExt(path);
@@ -73,6 +75,7 @@ static int try_load_wav(const char* path)
             message = calloc(strlen(msg) + 1, sizeof(char));
             strcpy(message, msg);
         }
+        message_sz = MeasureTextEx(GetFontDefault(), message, 24, 10);
     }
     audio_stream = LoadAudioStream(audio_file.samplert, audio_file.bits_per_sample, audio_file.nchan);
     SetAudioStreamCallback(audio_stream, audio_input_callback);
@@ -146,6 +149,7 @@ void update(void)
     if (IsWindowResized()) {
         w_height = GetScreenHeight(), w_width = GetScreenWidth();
         pb_height = PROGRESS_BAR_H * w_height;
+        message_sz = MeasureTextEx(GetFontDefault(), message, 24, 10);
     }
     if (IsFileDropped()) {
         FilePathList pl = LoadDroppedFiles();
@@ -163,24 +167,29 @@ void update(void)
         long int left = 0;
         long int right = 0;
         uint16_t nchan = audio_file.nchan;
+        size_t offset = last_data_ptr + (i * audio_file.bytes_per_block * sample_rate);
+        char* dp = audio_file.data + offset;
+        if (offset >= audio_file.datasz)
+            goto skip_sampling;
         switch (audio_file.bytes_per_block) {
         case 2: {
-            unsigned char* left_p = (unsigned char*)(audio_file.data + last_data_ptr + (i * audio_file.bytes_per_block * sample_rate));
+            unsigned char* left_p = (unsigned char*)(dp);
             left = *left_p;
             right = (nchan == 2) ? *(left_p + 1) : left;
         } break;
         case 4: {
-            short* left_p = (short*)(audio_file.data + last_data_ptr + (i * audio_file.bytes_per_block * sample_rate));
+            short* left_p = (short*)(dp);
             left = *left_p;
             right = (nchan == 2) ? *(left_p + 1) : left;
         } break;
         case 8: {
-            int* left_p = (int*)(audio_file.data + last_data_ptr + (i * audio_file.bytes_per_block * sample_rate));
+            int* left_p = (int*)(dp);
             left = *left_p;
             right = (nchan == 2) ? *(left_p + 1) : left;
         } break;
         }
         v = ((double)left + (double)right) * 0.5f / (1000.f);
+    skip_sampling:
         fft_input[i] = cmx_re(v);
     }
     (void)cmx_fft2(fft_input, FFTSIZE, 0, cmx_pre, fft_output);
@@ -188,7 +197,7 @@ void update(void)
     // https://stackoverflow.com/a/20584591
     for (size_t i = 0; i < FFTSIZE / 2; i += GROUPING_FACTOR) {
         double v = 0.0;
-        for (size_t j = 0; j < GROUPING_FACTOR; j++){
+        for (size_t j = 0; j < GROUPING_FACTOR; j++) {
             double tmp = cmx_mod(fft_output[i + j]);
             tmp = SMOOTHING * fft_draw_data[i / GROUPING_FACTOR] + ((1 - SMOOTHING) * tmp);
             // tmp = 10 * log10(pow(tmp, 2));
@@ -198,7 +207,6 @@ void update(void)
             v += tmp;
         }
         v /= GROUPING_FACTOR;
-        // double v = cmx_mod(cmx_mul(c, cmx_re((i + 1) * 0.5)));
         max = v > max ? v : max;
         min = v < min ? v : min;
         fft_draw_data[i / GROUPING_FACTOR] = v;
@@ -236,14 +244,17 @@ void draw_progress_bar(void)
         10,
         GRAY);
 }
-void draw(void)
+void draw_message(void)
 {
-    Vector2 fnsz = MeasureTextEx(GetFontDefault(), message, 24, 10);
-    Vector2 fnpos = {
+    Vector2 mpos = {
         .x = w_width / 2.,
         .y = w_height / 2.
     };
-    fnpos = Vector2Subtract(fnpos, Vector2Scale(fnsz, .5));
+    mpos = Vector2Subtract(mpos, Vector2Scale(message_sz, .5));
+    DrawTextEx(GetFontDefault(), message, mpos, 24, 10, WHITE);
+}
+void draw(void)
+{
     if (is_playing) {
         draw_progress_bar();
         draw_volume();
@@ -263,7 +274,7 @@ void draw(void)
         }
     }
     if (message)
-        DrawTextEx(GetFontDefault(), message, fnpos, 24, 10, WHITE);
+        draw_message();
 }
 
 int main(int argc, char** args)
@@ -290,12 +301,6 @@ int main(int argc, char** args)
         draw();
         EndDrawing();
     }
-    // free(fft_input);
-    // free(fft_output);
-    // free(fft_draw_data);
-    // free(cmx_pre);
-    // if (message)
-    //     free(message);
     UnloadAudioStream(audio_stream);
     CloseAudioDevice();
     CloseWindow();
