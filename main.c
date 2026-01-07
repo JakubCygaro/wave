@@ -1,4 +1,3 @@
-// #include "font.h"
 #include "wavfile.h"
 #include <raylib.h>
 #include <raymath.h>
@@ -37,7 +36,6 @@ static char* message = NULL;
 static Vector2 message_sz = { 0 };
 static float volume = 1.0;
 static double volume_draw_t = 0.0;
-// static Font font = { 0 };
 
 void audio_input_callback(void* buf, unsigned int frames);
 
@@ -257,7 +255,7 @@ void draw_message(void)
 void draw(void)
 {
     if (is_playing) {
-        const float col_width = (float)w_width / (float)(COLUMN_COUNT);
+        const float col_width = (float)w_width / (int)COLUMN_COUNT;
         const size_t whole = COLUMN_COUNT;
         const double total_height = (double)(w_height - pb_height);
         for (size_t i = 0; i < whole; i++) {
@@ -290,7 +288,6 @@ int main(int argc, char** args)
     InitAudioDevice();
     SetTargetFPS(FPS);
     SetAudioStreamBufferSizeDefault(4096);
-    // font = LoadFontFromMemory(font_get_format(), font_get_data_ptr(), font_get_data_size(), 100, NULL, 0);
     if (argc == 2) {
         char* path = args[1];
         try_load_wav(path);
